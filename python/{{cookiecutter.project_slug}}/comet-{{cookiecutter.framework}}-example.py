@@ -121,7 +121,7 @@ def train(experiment, model, x_train, y_train, x_test, y_test):
             self.targets = targets
             self.labels = targets.argmax(axis=1)
             self.image_size = (28, 28)
-            image, self.sprite_url = self.experiment.create_embedding_image(
+            results = self.experiment.create_embedding_image(
                 image_data=self.inputs,
                 # we round the pixels to 0 and 1, and multiple by 2
                 # to keep the non-zero colors dark (if they were 1, they
@@ -133,6 +133,10 @@ def train(experiment, model, x_train, y_train, x_test, y_test):
                 # Fill in the transparent color with a background color:
                 image_background_color_function=self.label_to_color,
             )
+            if results:
+                image, self.sprite_url = results
+            else:
+                self.sprite_url = None
 
         def label_to_color(self, index):
             label = self.labels[index]
