@@ -208,9 +208,6 @@ def train(experiment, model, x_train, y_train, x_test, y_test):
         callbacks=callbacks,
     )
 
-    {%- if cookiecutter.embedding == "Yes" %}
-    experiment.log_embedding_groups()
-    {%- endif %}
     experiment.send_notification("Training done", "finished", {"Data": "100"})
 
 
