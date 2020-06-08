@@ -184,9 +184,6 @@ def train(experiment, model, x_train, y_train, x_test, y_test):
     {%- endif %}
 
     callbacks = [
-        {%- if cookiecutter.predictor == "Yes" %}
-        experiment.get_predictor_callback("keras"),
-        {%- endif %}
         {%- if cookiecutter.confusion_matrix == "Yes" %}
         ConfusionMatrixCallback(experiment, x_test, y_test),
         {%- endif %}
@@ -278,14 +275,6 @@ def main():
             "batch_size": {"type": "discrete", "values": [64, 128, 256]},
         },
         "trials": 1,
-        {%- if cookiecutter.predictor == "Yes" %}
-        "predictor": {
-            "start": 1,
-            "patience": 2,
-            "threshold": 0.01,
-            "loss_name": "val_loss",
-        },
-        {%- endif %}
     }
 
     {%- if cookiecutter.online_or_offline == "Online" %}

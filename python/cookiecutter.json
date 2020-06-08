@@ -2,9 +2,8 @@
   "project_slug": "my_project",
   "online_or_offline": ["Online", "Offline"],
   "framework": ["keras"],
-  "optimizer": ["No", "Yes"],
-  "predictor": ["No", "Yes"],
   "confusion_matrix": ["Yes", "No"],
   "histogram": ["Yes", "No"],
   "embedding": ["Yes", "No"]
+  "optimizer": ["No", "Yes"],
 }
