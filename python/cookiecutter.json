@@ -4,6 +4,6 @@
   "framework": ["keras"],
   "confusion_matrix": ["Yes", "No"],
   "histogram": ["Yes", "No"],
-  "embedding": ["Yes", "No"]
-  "optimizer": ["No", "Yes"],
+  "embedding": ["Yes", "No"],
+  "optimizer": ["No", "Yes"]
 }
