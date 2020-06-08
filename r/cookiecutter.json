@@ -1,0 +1,4 @@
+{
+  "project_slug": "my_project",
+  "framework": ["keras", "caret", "nnet"]
+}

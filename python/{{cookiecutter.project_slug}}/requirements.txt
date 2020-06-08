@@ -1,0 +1,11 @@
+comet_ml
+{%- if cookiecutter.framework == 'keras' %}
+keras
+tensorflow
+    {%- if cookiecutter.embedding == "Yes" %}
+keract
+numpy
+pillow
+matplotlib
+    {%- endif %}
+{%- endif %}
