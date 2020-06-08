@@ -5,6 +5,7 @@ A collection of cookiecutter recipes for integrating ML frameworks with [Comet](
 The easiest way to invoke these recipes is through:
 
 ```
+$ pip install comet_ml
 $ comet init
 ```
 
