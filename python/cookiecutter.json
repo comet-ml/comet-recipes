@@ -1,4 +1,5 @@
 {
+  "comet_api_key": "",
   "project_slug": "my_project",
   "online_or_offline": ["Online", "Offline"],
   "framework": ["keras"],
