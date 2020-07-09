@@ -272,7 +272,6 @@ def main():
                 "sigma": 50,
                 "scalingType": "normal",
             },
-            "epochs": {"type": "integer", "min": 1, "max": 100},
             "batch_size": {"type": "discrete", "values": [64, 128, 256]},
         },
         "trials": 1,
@@ -294,6 +293,8 @@ def main():
     }
 
     for experiment in opt.get_experiments(**experiment_kwargs):
+        experiment.log_parameter("epochs", 10)
+
         model = build_model_graph(experiment)
 
         train(experiment, model, x_train, y_train, x_test, y_test)
