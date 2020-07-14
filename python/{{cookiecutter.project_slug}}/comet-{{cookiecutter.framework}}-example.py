@@ -6,12 +6,12 @@ from comet_ml import ConfusionMatrix
 import logging
 
 {%- if cookiecutter.framework == 'keras' %}
-import keras
-from keras.callbacks import Callback
-from keras.datasets import mnist
-from keras.layers import Dense
-from keras.models import Sequential
-from keras.optimizers import RMSprop
+from tensorflow.keras.callbacks import Callback
+from tensorflow.keras.datasets import mnist
+from tensorflow.keras.layers import Dense
+from tensorflow.keras.models import Sequential
+from tensorflow.keras.optimizers import RMSprop
+from tensorflow.keras.utils import to_categorical
 {%- endif %}
 
 {%- if cookiecutter.embedding == "Yes" %}
@@ -171,19 +171,25 @@ def train(experiment, model, x_train, y_train, x_test, y_test):
             if (epoch + 1) % 10 != 0:
                 return
             # Assuming one input bank:
-            input_tensor = self.inputs
-            activations = keract.get_activations(self.model, input_tensor)
-            keys = list(activations.keys())
-            # Get the activations before output layer:
-            layer_name = keys[-2]
-            # Group the embeddings by layer_name:
-            self.experiment.log_embedding(
-                activations[layer_name],
-                self.labels,
-                image_data=self.sprite_url,
-                image_size=self.image_size,
-                title="%s-%s" % (layer_name, epoch + 1),
-                group=layer_name)
+            if self.model:
+                input_tensor = self.inputs
+                try:
+                    activations = keract.get_activations(self.model, input_tensor)
+                except Exception:
+                    logging.info("keract.get_activations() failed... try upgrading tensorflow and keract; ignoring embeddings")
+                    return
+                keys = list(activations.keys())
+                # Get the activations before output layer:
+                if len(keys) >= 2:
+                    layer_name = keys[-2]
+                    # Group the embeddings by layer_name:
+                    self.experiment.log_embedding(
+                        activations[layer_name],
+                        self.labels,
+                        image_data=self.sprite_url,
+                        image_size=self.image_size,
+                        title="%s-%s" % (layer_name, epoch + 1),
+                        group=layer_name)
 
     {%- endif %}
 
@@ -208,8 +214,6 @@ def train(experiment, model, x_train, y_train, x_test, y_test):
         callbacks=callbacks,
     )
 
-    experiment.send_notification("Training done", "finished", {"Data": "100"})
-
 
 def evaluate(experiment, model, x_test, y_test):
     score = model.evaluate(x_test, y_test, verbose=0)
@@ -232,8 +236,8 @@ def get_dataset():
     print(x_test.shape[0], "test samples")
 
     # convert class vectors to binary class matrices
-    y_train = keras.utils.to_categorical(y_train, num_classes)
-    y_test = keras.utils.to_categorical(y_test, num_classes)
+    y_train = to_categorical(y_train, num_classes)
+    y_test = to_categorical(y_test, num_classes)
 
     return x_train, y_train, x_test, y_test
 
