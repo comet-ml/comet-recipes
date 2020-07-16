@@ -10,6 +10,7 @@ from comet_ml import ConfusionMatrix
 {%- endif %}
 
 import logging
+LOGGER = logging.getLogger(__file__)
 
 {%- if cookiecutter.framework == 'keras' %}
 from tensorflow.keras.callbacks import Callback
@@ -182,7 +183,7 @@ def train(experiment, model, x_train, y_train, x_test, y_test):
                 try:
                     activations = keract.get_activations(self.model, input_tensor)
                 except Exception:
-                    logging.info("keract.get_activations() failed... try upgrading tensorflow and keract; ignoring embeddings")
+                    LOGGER.warning("keract.get_activations() failed... try upgrading tensorflow and keract; ignoring embeddings")
                     return
                 keys = list(activations.keys())
                 # Get the activations before output layer:
@@ -206,10 +207,14 @@ def train(experiment, model, x_train, y_train, x_test, y_test):
         {%- if cookiecutter.histogram == "Yes" %}
         HistogramCallback(experiment),
         {%- endif %}
-        {%- if cookiecutter.embedding == "Yes" %}
+        {%- if cookiecutter.embedding == "Yes" and cookiecutter.online_or_offline == "Online"%}
         EmbeddingCallback(experiment, x_test, y_test),
         {%- endif %}
     ]
+
+    {%- if cookiecutter.embedding == "Yes" and cookiecutter.online_or_offline == "Offline"%}
+    LOGGER.warning("Embedding is currently only supported for online experiments")
+    {%- endif %}
 
     model.fit(
         x_train,
@@ -223,7 +228,7 @@ def train(experiment, model, x_train, y_train, x_test, y_test):
 
 def evaluate(experiment, model, x_test, y_test):
     score = model.evaluate(x_test, y_test, verbose=0)
-    logging.info("Score %s", score)
+    LOGGER.info("Score %s", score)
 
 
 def get_dataset():
