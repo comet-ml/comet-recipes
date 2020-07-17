@@ -10,7 +10,8 @@ from comet_ml import ConfusionMatrix
 {%- endif %}
 
 import logging
-LOGGER = logging.getLogger(__file__)
+logging.basicConfig(level=logging.INFO)
+LOGGER = logging.getLogger(__name__)
 
 {%- if cookiecutter.framework == 'keras' %}
 from tensorflow.keras.callbacks import Callback
@@ -300,12 +301,12 @@ def main():
     experiment_class = comet_ml.OfflineExperiment
     {%- endif %}
 
-    opt = comet_ml.Optimizer(config, experiment_class)
+    opt = comet_ml.Optimizer(config, experiment_class=experiment_class)
 
     experiment_kwargs = {
         "project_name": "{{ cookiecutter.project_slug }}",
         {%- if cookiecutter.online_or_offline == "Offline" %}
-        "offline_dir": ".",
+        "offline_directory": ".",
         {%- endif %}
     }
 
