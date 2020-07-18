@@ -11,7 +11,7 @@ from comet_ml import ConfusionMatrix
 
 import logging
 logging.basicConfig(level=logging.INFO)
-LOGGER = logging.getLogger(__name__)
+LOGGER = logging.getLogger("comet_ml")
 
 {%- if cookiecutter.framework == 'keras' %}
 from tensorflow.keras.callbacks import Callback
