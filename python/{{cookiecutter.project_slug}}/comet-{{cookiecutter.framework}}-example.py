@@ -29,12 +29,19 @@ import numpy as np
 
 
 def get_comet_experiment():
+    args = {
+        "project_name": "{{ cookiecutter.project_slug }}",
+        {%- if cookiecutter.online_or_offline == "Offline" %}
+        "offline_directory": ".",
+        {%- endif %}
+        {%- if cookiecutter.histogram == "Yes" %}
+        "auto_weight_logging": True,
+        {%- endif %}
+    }
     {%- if cookiecutter.online_or_offline == "Online" %}
-    return comet_ml.Experiment(project_name="{{ cookiecutter.project_slug }}")
+    return comet_ml.Experiment(**args)
     {%- elif cookiecutter.online_or_offline == "Offline" %}
-    return comet_ml.OfflineExperiment(
-        offline_directory=".", project_name="{{ cookiecutter.project_slug }}"
-    )
+    return comet_ml.OfflineExperiment(**args)
     {%- endif %}
 
 
@@ -101,26 +108,6 @@ def train(experiment, model, x_train, y_train, x_test, y_test):
 
     {%- endif %}
 
-    {%- if cookiecutter.histogram == "Yes" %}
-    class HistogramCallback(Callback):
-        def __init__(self, experiment):
-            self.experiment = experiment
-
-        def on_epoch_begin(self, epoch, logs={}):
-            # Get Histogram before training:
-            if epoch == 0:
-                self.on_epoch_end(-1)
-
-        def on_epoch_end(self, epoch, logs={}):
-            for layer in range(len(self.model.layers)):
-                weights_biases = self.model.layers[layer].get_weights()
-                self.experiment.log_histogram_3d(
-                    weights_biases,
-                    name="histogram-layer-%03d.json" % layer,
-                    step=(epoch + 1),
-                )
-
-    {%- endif %}
     {%- if cookiecutter.embedding == "Yes" %}
     class EmbeddingCallback(Callback):
         def __init__(self, experiment, inputs, targets):
@@ -204,9 +191,6 @@ def train(experiment, model, x_train, y_train, x_test, y_test):
     callbacks = [
         {%- if cookiecutter.confusion_matrix == "Yes" %}
         ConfusionMatrixCallback(experiment, x_test, y_test),
-        {%- endif %}
-        {%- if cookiecutter.histogram == "Yes" %}
-        HistogramCallback(experiment),
         {%- endif %}
         {%- if cookiecutter.embedding == "Yes" and cookiecutter.online_or_offline == "Online"%}
         EmbeddingCallback(experiment, x_test, y_test),
