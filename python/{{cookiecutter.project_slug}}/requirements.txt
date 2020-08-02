@@ -1,7 +1,7 @@
 comet_ml
 {%- if cookiecutter.framework == 'keras' %}
 keras
-tensorflow==2.2.0
+tensorflow<=2.2.0
     {%- if cookiecutter.embedding == "Yes" %}
 keract
 numpy
