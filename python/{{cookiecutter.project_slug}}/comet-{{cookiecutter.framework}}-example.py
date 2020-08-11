@@ -10,7 +10,6 @@ from comet_ml import ConfusionMatrix
 {%- endif %}
 
 import logging
-logging.basicConfig(level=logging.INFO)
 LOGGER = logging.getLogger("comet_ml")
 
 {%- if cookiecutter.framework == 'keras' %}
