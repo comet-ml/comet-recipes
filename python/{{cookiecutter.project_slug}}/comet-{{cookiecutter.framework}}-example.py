@@ -27,16 +27,7 @@ import numpy as np
 {%- endif %}
 
 
-def get_comet_experiment():
-    args = {
-        "project_name": "{{ cookiecutter.project_slug }}",
-        {%- if cookiecutter.online_or_offline == "Offline" %}
-        "offline_directory": ".",
-        {%- endif %}
-        {%- if cookiecutter.histogram == "Yes" %}
-        "auto_weight_logging": True,
-        {%- endif %}
-    }
+def get_comet_experiment(**args):
     {%- if cookiecutter.online_or_offline == "Online" %}
     return comet_ml.Experiment(**args)
     {%- elif cookiecutter.online_or_offline == "Offline" %}
@@ -243,9 +234,19 @@ def get_dataset():
 def main():
     x_train, y_train, x_test, y_test = get_dataset()
 
+    experiment_kwargs = {
+        "project_name": "{{ cookiecutter.project_slug }}",
+        {%- if cookiecutter.online_or_offline == "Offline" %}
+        "offline_directory": ".",
+        {%- endif %}
+        {%- if cookiecutter.histogram == "Yes" %}
+        "auto_weight_logging": True,
+        {%- endif %}
+    }
+
     {%- if cookiecutter.optimizer == 'No' %}
     {%- if cookiecutter.framework == 'keras' %}
-    experiment = get_comet_experiment()
+    experiment = get_comet_experiment(**experiment_kwargs)
 
     experiment.log_parameter("epochs", 10)
     experiment.log_parameter("batch_size", 120)
@@ -285,13 +286,6 @@ def main():
     {%- endif %}
 
     opt = comet_ml.Optimizer(config, experiment_class=experiment_class)
-
-    experiment_kwargs = {
-        "project_name": "{{ cookiecutter.project_slug }}",
-        {%- if cookiecutter.online_or_offline == "Offline" %}
-        "offline_directory": ".",
-        {%- endif %}
-    }
 
     for experiment in opt.get_experiments(**experiment_kwargs):
         experiment.log_parameter("epochs", 10)
