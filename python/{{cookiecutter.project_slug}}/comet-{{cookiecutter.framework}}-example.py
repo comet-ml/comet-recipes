@@ -239,10 +239,38 @@ def main():
         {%- if cookiecutter.online_or_offline == "Offline" %}
         "offline_directory": ".",
         {%- endif %}
-        {%- if cookiecutter.histogram == "Yes" %}
-        "auto_weight_logging": True,
+        {%- if cookiecutter.weight_histograms == "Yes" %}
+        "auto_histogram_weight_logging": True,
+        {%- endif %}
+        {%- if cookiecutter.gradient_histograms == "Yes" %}
+        "auto_histogram_gradient_logging": True,
+        {%- endif %}
+        {%- if cookiecutter.activation_histograms == "Yes" %}
+        "auto_histogram_activation_logging": True,
         {%- endif %}
     }
+
+    {%- if ((cookiecutter.weight_histograms == "Yes") or
+            (cookiecutter.gradient_histograms == "Yes") or
+            (cookiecutter.gradient_histograms == "Yes")) %}
+    ########################################################
+    # If you would like to control exactly which histograms
+    # are logged, how often, which inputs are used, and
+    # to which layers, change these configuration variables:
+    #
+    # import os
+    # os.environ["COMET_KERAS_HISTOGRAM_NAME_PREFIX"] = "{layer_num:0{max_digits}d}"
+    # os.environ["COMET_KERAS_HISTOGRAM_ACTIVATION_INDEX_LIST"] = "0"
+    # os.environ["COMET_KERAS_HISTOGRAM_ACTIVATION_LAYER_LIST"] = ""
+    # os.environ["COMET_KERAS_HISTOGRAM_BATCH_SIZE"] = "1000"
+    # os.environ["COMET_KERAS_HISTOGRAM_GRADIENT_INDEX_LIST"] = ""
+    # os.environ["COMET_KERAS_HISTOGRAM_GRADIENT_LAYER_LIST"] = "-1"
+    # os.environ["COMET_AUTO_LOG_HISTOGRAM_EPOCH_RATE"] = "1"
+    #
+    # For more information, see:
+    # https://www.comet.ml/docs/python-sdk/advanced/#comet-environment-only-variables
+    ########################################################
+    {%- endif %}
 
     {%- if cookiecutter.optimizer == 'No' %}
     {%- if cookiecutter.framework == 'keras' %}
