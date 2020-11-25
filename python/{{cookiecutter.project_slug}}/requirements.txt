@@ -3,7 +3,7 @@ comet_ml
 keras
 tensorflow<2.3
     {%- if cookiecutter.embedding == "Yes" %}
-keract
+keract>=4.3.3
 numpy
 pillow
 matplotlib
