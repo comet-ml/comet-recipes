@@ -8,5 +8,6 @@
   "gradient_histograms": ["Yes", "No"],
   "activation_histograms": ["Yes", "No"],
   "embedding": ["Yes", "No"],
-  "optimizer": ["Yes", "No"]
+  "optimizer": ["Yes", "No"],
+  "logging_samples": ["Yes", "No"]
 }
