@@ -8,6 +8,9 @@ import comet_ml
 {%- if cookiecutter.confusion_matrix == "Yes" %}
 from comet_ml import ConfusionMatrix
 {%- endif %}
+{%- if cookiecutter.logging_samples == "Yes" %}
+import random
+{%- endif %}
 
 import logging
 LOGGER = logging.getLogger("comet_ml")
@@ -276,9 +279,25 @@ def main():
     {%- if cookiecutter.framework == 'keras' %}
     experiment = get_comet_experiment(**experiment_kwargs)
 
+    # Logging hyperparameters:
     experiment.log_parameter("epochs", 10)
     experiment.log_parameter("batch_size", 120)
     experiment.log_parameter("first_layer_units", 128)
+    {%- endif %}
+
+    {%- if cookiecutter.logging_samples == 'Yes' %}
+    # Logging samples:
+    experiment.log_text("example text 1")
+    experiment.log_text("example text 2")
+    experiment.log_text("example text 3")
+    experiment.log_curve("curve 1",
+                         x=[x for x in range(100)],
+                         y=[y ** 2 for y in range(100)])
+    experiment.log_points_3d("scene 1",
+                         points=[(random.random(),
+                                  random.random(),
+                                  random.random()) for _ in range(100)],
+    )
     {%- endif %}
 
     model = build_model_graph(experiment)
