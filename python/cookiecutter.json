@@ -1,12 +1,13 @@
 {
-  "comet_api_key": "",
-  "project_slug": "my_project",
-  "online_or_offline": ["Online", "Offline"],
-  "framework": ["keras"],
-  "confusion_matrix": ["Yes", "No"],
-  "weight_histograms": ["Yes", "No"],
-  "gradient_histograms": ["Yes", "No"],
-  "activation_histograms": ["Yes", "No"],
-  "embedding": ["Yes", "No"],
-  "optimizer": ["Yes", "No"]
+    "comet_api_key": "",
+    "project_slug": "my_project",
+    "online_or_offline": ["Online", "Offline"],
+    "framework": ["keras", "pytorch"],
+    "confusion_matrix": ["Yes", "No"],
+    "weight_histograms": ["Yes", "No"],
+    "gradient_histograms": ["Yes", "No"],
+    "activation_histograms": ["Yes", "No"],
+    "embedding": ["Yes", "No"],
+    "optimizer": ["Yes", "No"],
+    "logging_samples": ["Yes", "No"]
 }
