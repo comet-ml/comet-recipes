@@ -276,6 +276,9 @@ def train(experiment, model, datasets):
 
     {%- endif %}
 
+    all_labels = [label for (image, label, index) in train_dataset]
+    inputs = [image.numpy() for (image, label, index) in train_dataset]
+    sprite_url = None
     with experiment.train():
         step = 0
         for epoch in range(experiment.get_parameter('epochs')):
@@ -331,6 +334,7 @@ def train(experiment, model, datasets):
             indices, actual, predicted = list(zip(*sorted(zip(
                 batch_indices, batch_actual, batch_predicted))))
 
+            print("Creating confusion matrix...")
             confusion_matrix.compute_matrix(actual, predicted)
 
             experiment.log_confusion_matrix(
@@ -340,52 +344,85 @@ def train(experiment, model, datasets):
             )
             {%- endif %}
 
-        # Epoch level items
-        {%- if cookiecutter.embedding == "Yes" %}
+            # Epoch level items
+            {%- if cookiecutter.embedding == "Yes" %}
 
-        # First, create the embedding image for this epoch:
+            if epoch == 0:
+                # First, create the embedding image:
+                def label_to_color(index):
+                    label = all_labels[index]
+                    if label == 0:
+                        return (255, 0, 0)
+                    elif label == 1:
+                        return (0, 255, 0)
+                    elif label == 2:
+                        return (0, 0, 255)
+                    elif label == 3:
+                        return (255, 255, 0)
+                    elif label == 4:
+                        return (0, 255, 255)
+                    elif label == 5:
+                        return (128, 128, 0)
+                    elif label == 6:
+                        return (0, 128, 128)
+                    elif label == 7:
+                        return (128, 0, 128)
+                    elif label == 8:
+                        return (255, 0, 255)
+                    elif label == 9:
+                        return (255, 255, 255)
 
-        results = experiment.create_embedding_image(
-            image_data=inputs,
-            # we round the pixels to 0 and 1, and multiple by 2
-            # to keep the non-zero colors dark (if they were 1, they
-            # would get distributed between 0 and 255):
-            image_preprocess_function=lambda matrix: np.round(matrix,0) * 2,
-            # Set the transparent color:
-            image_transparent_color=(0, 0, 0),
-            image_size=self.image_size,
-            # Fill in the transparent color with a background color:
-            image_background_color_function=self.label_to_color,
-        )
-        if results:
-            image, self.sprite_url = results
-        else:
-            self.sprite_url = None
+                print("Creating embedding image...")
+                results = experiment.create_embedding_image(
+                    image_data=inputs,
+                    # we round the pixels to 0 and 1, and multiple by 2
+                    # to keep the non-zero colors dark (if they were 1, they
+                    # would get distributed between 0 and 255):
+                    image_preprocess_function=lambda matrix: np.round(matrix,0) * 2,
+                    # Set the transparent color:
+                    image_transparent_color=(0, 0, 0),
+                    image_size=(
+                        experiment.get_parameter("input_size"),
+                        experiment.get_parameter("input_size"),
+                    ),
+                    # Fill in the transparent color with a background color:
+                    image_background_color_function=label_to_color,
+                )
+                if results:
+                    image, sprite_url = results
+                else:
+                    sprite_url = None
+            else:
+                # In subsequent epochs, log the activations:
+                if sprite_url:
+                    print("Logging embedding...")
+                    activations = []
+                    for i in range(len(all_labels)):
+                        v = Variable(train_dataset[i][0])
+                        output = rnn(v)
+                        activations.append(rnn.out[0].detach().numpy())
+                    layer_name = "activations/0"
+                    experiment.log_embedding(
+                        activations,
+                        all_labels,
+                        image_data=sprite_url,
+                        image_size=(
+                            experiment.get_parameter("input_size"),
+                            experiment.get_parameter("input_size"),
+                        ),
+                        title="%s-%s" % (layer_name, epoch + 1),
+                        group=layer_name)
 
-        def label_to_color(self, index):
-            label = self.labels[index]
-            if label == 0:
-                return (255, 0, 0)
-            elif label == 1:
-                return (0, 255, 0)
-            elif label == 2:
-                return (0, 0, 255)
-            elif label == 3:
-                return (255, 255, 0)
-            elif label == 4:
-                return (0, 255, 255)
-            elif label == 5:
-                return (128, 128, 0)
-            elif label == 6:
-                return (0, 128, 128)
-            elif label == 7:
-                return (128, 0, 128)
-            elif label == 8:
-                return (255, 0, 255)
-            elif label == 9:
-                return (255, 255, 255)
-
-        {%- endif %}
+            {%- endif %}
+            {%- if cookiecutter.weight_histograms == "Yes" %}
+            # TODO: log weight histograms here!
+            {%- endif %}
+            {%- if cookiecutter.activation_histograms == "Yes" %}
+            # TODO: log activation histograms here!
+            {%- endif %}
+            {%- if cookiecutter.gradient_histograms == "Yes" %}
+            # TODO: log gradient histograms here!
+            {%- endif %}
 
 
 def build_model(experiment):
@@ -409,10 +446,10 @@ def build_model(experiment):
             c0 = Variable(torch.zeros(self.num_layers, x.size(0), self.hidden_size))
 
             # Forward propagate RNN
-            out, _ = self.lstm(x, (h0, c0))
+            self.out, _ = self.lstm(x, (h0, c0))
 
             # Decode hidden state of last time step
-            out = self.fc(out[:, -1, :])
+            out = self.fc(self.out[:, -1, :])
             return out
 
     rnn = RNN(
@@ -457,6 +494,8 @@ def evaluate(experiment, model, datasets):
 
 
 def get_datasets(hyper_params):
+    from torch.utils.data import Subset
+
     # MNIST Dataset
     def indexed_dataset(cls):
         def __getitem__(self, index):
@@ -478,6 +517,10 @@ def get_datasets(hyper_params):
                          train=False,
                          transform=transforms.ToTensor())
 
+    #indices = torch.arange(1000)
+    #train_dataset = Subset(train_dataset, indices)
+    #test_dataset = Subset(test_dataset, indices)
+
     return (train_dataset, test_dataset)
 
 {%- endif %}
@@ -485,7 +528,7 @@ def get_datasets(hyper_params):
 
 def main():
     hyper_params = {
-        "epochs": 10,
+        "epochs": {{ cookiecutter.epochs }},
         "batch_size": 120,
         "first_layer_units": 128,
         "sequence_length": 28,
@@ -518,6 +561,7 @@ def main():
     {%- if ((cookiecutter.weight_histograms == "Yes") or
             (cookiecutter.gradient_histograms == "Yes") or
             (cookiecutter.gradient_histograms == "Yes")) %}
+    {%- if cookiecutter.framework == 'keras' %}
     ########################################################
     # If you would like to control exactly which histograms
     # are logged, how often, which inputs are used, and
@@ -535,6 +579,7 @@ def main():
     # For more information, see:
     # https://www.comet.ml/docs/python-sdk/advanced/#comet-environment-only-variables
     ########################################################
+    {%- endif %}
     {%- endif %}
 
     {%- if cookiecutter.optimizer == 'No' %}
@@ -571,7 +616,16 @@ def main():
     config = {
         "algorithm": "bayes",
         "name": "Optimize MNIST Network",
-        "spec": {"maxCombo": 10, "objective": "minimize", "metric": "loss"},
+        "spec": {
+            "maxCombo": 10,
+            "objective":
+            "minimize",
+{%- if cookiecutter.framework == 'pytorch' %}
+            "metric": "train_loss",
+{%- elif cookiecutter.framework == 'keras' %}
+            "metric": "loss",
+{%- endif %}
+        },
         "parameters": {
             "first_layer_units": {
                 "type": "integer",

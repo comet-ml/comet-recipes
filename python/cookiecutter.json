@@ -3,6 +3,7 @@
     "project_slug": "my_project",
     "online_or_offline": ["Online", "Offline"],
     "framework": ["keras", "pytorch"],
+    "epochs": "10",
     "confusion_matrix": ["Yes", "No"],
     "weight_histograms": ["Yes", "No"],
     "gradient_histograms": ["Yes", "No"],
