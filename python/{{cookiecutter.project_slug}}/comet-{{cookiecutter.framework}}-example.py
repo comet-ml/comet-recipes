@@ -247,14 +247,19 @@ def get_datasets(hyper_params):
 {%- if cookiecutter.framework == 'pytorch' %}
 
 def train(experiment, model, datasets):
+    from torch.utils.data import SubsetRandomSampler
+
     rnn, criterion, optimizer = model
     train_dataset, test_dataset = datasets
 
     # Data Loader (Input Pipeline)
+    # Sampling only from first 1000
+    sampler = SubsetRandomSampler(list(range(1000)))
     train_loader = torch.utils.data.DataLoader(
         dataset=train_dataset,
         batch_size=experiment.get_parameter('batch_size'),
-        shuffle=True,
+        sampler=sampler,
+        #shuffle=True,
     )
 
     {%- if cookiecutter.confusion_matrix == "Yes" %}
@@ -276,8 +281,10 @@ def train(experiment, model, datasets):
 
     {%- endif %}
 
-    all_labels = [label for (image, label, index) in train_dataset]
-    inputs = [image.numpy() for (image, label, index) in train_dataset]
+    # In order:
+    print("Collecting 1000 data...")
+    all_labels = [label for (image, label, index) in train_dataset if index < 1000]
+    inputs = [image.numpy() for (image, label, index) in train_dataset if index < 1000]
     sprite_url = None
     with experiment.train():
         step = 0
@@ -288,6 +295,7 @@ def train(experiment, model, datasets):
             batch_predicted = []
             batch_indices = []
             for batch_step, (images, labels, indices) in enumerate(train_loader):
+                print("batch step:", batch_step, "...")
                 images = Variable(images.view(
                     -1,
                     experiment.get_parameter('sequence_length'),
@@ -395,7 +403,7 @@ def train(experiment, model, datasets):
             else:
                 # In subsequent epochs, log the activations:
                 if sprite_url:
-                    print("Logging embedding...")
+                    print("Logging embeddings...")
                     activations = []
                     for i in range(len(all_labels)):
                         v = Variable(train_dataset[i][0])
@@ -494,8 +502,6 @@ def evaluate(experiment, model, datasets):
 
 
 def get_datasets(hyper_params):
-    from torch.utils.data import Subset
-
     # MNIST Dataset
     def indexed_dataset(cls):
         def __getitem__(self, index):
@@ -516,10 +522,6 @@ def get_datasets(hyper_params):
     test_dataset = MNIST(root='./data/',
                          train=False,
                          transform=transforms.ToTensor())
-
-    #indices = torch.arange(1000)
-    #train_dataset = Subset(train_dataset, indices)
-    #test_dataset = Subset(test_dataset, indices)
 
     return (train_dataset, test_dataset)
 
