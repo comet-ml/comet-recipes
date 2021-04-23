@@ -9,6 +9,8 @@ import comet_ml
 from comet_ml import ConfusionMatrix
 {%- endif %}
 
+import numpy as np
+import random
 import logging
 LOGGER = logging.getLogger("comet_ml")
 
@@ -21,9 +23,16 @@ from tensorflow.keras.optimizers import RMSprop
 from tensorflow.keras.utils import to_categorical
 {%- endif %}
 
+{%- if cookiecutter.framework == 'pytorch' %}
+import torch
+import torch.nn as nn
+import torchvision.datasets as dsets
+import torchvision.transforms as transforms
+from torch.autograd import Variable
+{%- endif %}
+
 {%- if cookiecutter.embedding == "Yes" %}
 import keract
-import numpy as np
 {%- endif %}
 
 
@@ -38,7 +47,7 @@ def get_comet_experiment(**args):
 {%- if cookiecutter.framework == 'keras' %}
 
 
-def build_model_graph(experiment):
+def build_model(experiment):
     model = Sequential()
     model.add(
         Dense(
@@ -47,9 +56,11 @@ def build_model_graph(experiment):
             input_shape=(784,),
         )
     )
-    model.add(Dense(128, activation="sigmoid"))
-    model.add(Dense(128, activation="sigmoid"))
-    model.add(Dense(10, activation="softmax"))
+    model.add(Dense(experiment.get_parameter("hidden_size"), activation="sigmoid"))
+    model.add(Dense(experiment.get_parameter("hidden_size"), activation="sigmoid"))
+    model.add(Dense(
+        experiment.get_parameter("num_classes"),
+        activation="softmax"))
     model.compile(
         loss="categorical_crossentropy",
         optimizer=RMSprop(),
@@ -59,14 +70,19 @@ def build_model_graph(experiment):
     return model
 
 
-def train(experiment, model, x_train, y_train, x_test, y_test):
+def train(experiment, model, datasets):
+    x_train, y_train, x_test, y_test = datasets
+    input_size = experiment.get_parameter("input_size")
+
     {%- if cookiecutter.confusion_matrix == "Yes" %}
     class ConfusionMatrixCallback(Callback):
         def __init__(self, experiment, inputs, targets):
             self.experiment = experiment
             self.inputs = inputs
             self.targets = targets
-            # We make one ConfusionMatrix so to share images:
+            # We make a ConfusionMatrix here so that we can share
+            # examples across epochs and cut down on the images
+            # uploaded:
             self.confusion_matrix = ConfusionMatrix(
                 index_to_example_function=self.index_to_example)
 
@@ -92,7 +108,7 @@ def train(experiment, model, x_train, y_train, x_test, y_test):
             result = self.experiment.log_image(
                 image_array,
                 name=image_name,
-                image_shape=(28, 28, 1))
+                image_shape=(input_size, input_size, 1))
             # Return sample name and assetId
             return {"sample": image_name, "assetId": result["imageId"]}
 
@@ -105,7 +121,7 @@ def train(experiment, model, x_train, y_train, x_test, y_test):
             self.inputs = inputs
             self.targets = targets
             self.labels = targets.argmax(axis=1)
-            self.image_size = (28, 28)
+            self.image_size = (input_size, input_size)
             results = self.experiment.create_embedding_image(
                 image_data=self.inputs,
                 # we round the pixels to 0 and 1, and multiple by 2
@@ -200,15 +216,13 @@ def train(experiment, model, x_train, y_train, x_test, y_test):
         callbacks=callbacks,
     )
 
+def evaluate(experiment, model, datasets):
+    x_train, y_train, x_test, y_test = datasets
 
-def evaluate(experiment, model, x_test, y_test):
     score = model.evaluate(x_test, y_test, verbose=0)
     LOGGER.info("Score %s", score)
 
-
-def get_dataset():
-    num_classes = 10
-
+def get_datasets(hyper_params):
     # the data, shuffled and split between train and test sets
     (x_train, y_train), (x_test, y_test) = mnist.load_data()
 
@@ -222,17 +236,310 @@ def get_dataset():
     print(x_test.shape[0], "test samples")
 
     # convert class vectors to binary class matrices
-    y_train = to_categorical(y_train, num_classes)
-    y_test = to_categorical(y_test, num_classes)
+    y_train = to_categorical(y_train, hyper_params["num_classes"])
+    y_test = to_categorical(y_test, hyper_params["num_classes"])
 
     return x_train, y_train, x_test, y_test
 
 
 {%- endif %}
 
+{%- if cookiecutter.framework == 'pytorch' %}
+
+def train(experiment, model, datasets):
+    from torch.utils.data import SubsetRandomSampler
+
+    rnn, criterion, optimizer = model
+    train_dataset, test_dataset = datasets
+
+    # Data Loader (Input Pipeline)
+    # Sampling only from first 1000
+    sampler = SubsetRandomSampler(list(range(1000)))
+    train_loader = torch.utils.data.DataLoader(
+        dataset=train_dataset,
+        batch_size=experiment.get_parameter('batch_size'),
+        sampler=sampler,
+        #shuffle=True,
+    )
+
+    {%- if cookiecutter.confusion_matrix == "Yes" %}
+    def index_to_example(index):
+        image_array, label, _index = train_dataset[index]
+        image_name = "confusion-matrix-%05d.png" % index
+        result = experiment.log_image(
+            image_array,
+            name=image_name,
+            image_shape=(28, 28, 1))
+        #Return sample name and assetId
+        return {"sample": image_name, "assetId": result["imageId"]}
+
+    # We make a ConfusionMatrix here so that we can share
+    # examples across epochs and cut down on the images
+    # uploaded:
+    confusion_matrix = ConfusionMatrix(
+        index_to_example_function=index_to_example)
+
+    {%- endif %}
+
+    # In order:
+    print("Collecting 1000 data...")
+    all_labels = [label for (image, label, index) in train_dataset if index < 1000]
+    inputs = [image.numpy() for (image, label, index) in train_dataset if index < 1000]
+    sprite_url = None
+    with experiment.train():
+        step = 0
+        for epoch in range(experiment.get_parameter('epochs')):
+            correct = 0
+            total = 0
+            batch_actual = []
+            batch_predicted = []
+            batch_indices = []
+            for batch_step, (images, labels, indices) in enumerate(train_loader):
+                print("batch step:", batch_step, "...")
+                images = Variable(images.view(
+                    -1,
+                    experiment.get_parameter('sequence_length'),
+                    experiment.get_parameter("input_size")))
+
+                labels = Variable(labels)
+
+                # Forward + Backward + Optimize
+                optimizer.zero_grad()
+                outputs = rnn(images)
+                loss = criterion(outputs, labels)
+                loss.backward()
+                optimizer.step()
+
+                # Compute train accuracy
+                _, predicted = torch.max(outputs.data, 1)
+                batch_total = labels.size(0)
+                total += batch_total
+
+                batch_correct = (predicted == labels.data).sum()
+                correct += batch_correct
+
+                batch_predicted.extend(predicted.numpy().tolist())
+                batch_actual.extend(labels.data.numpy().tolist())
+                batch_indices.extend(indices.numpy().tolist())
+
+                # Log batch_accuracy to Comet.ml; step is each batch
+                step += 1
+                experiment.log_metric("batch_accuracy", batch_correct / batch_total, step=step)
+
+                if (batch_step + 1) % 100 == 0:
+                    print('Epoch [%d/%d], Step [%d/%d], Loss: %.4f'
+                          % (epoch + 1,
+                             experiment.get_parameter('epochs'),
+                             batch_step + 1,
+                             len(train_dataset) // experiment.get_parameter('batch_size'),
+                             loss.item()))
+
+            # Log epoch accuracy to Comet.ml; step is each epoch
+            experiment.log_metric("batch_accuracy", correct / total, step=epoch, epoch=epoch)
+
+            {%- if cookiecutter.confusion_matrix == "Yes" %}
+
+            indices, actual, predicted = list(zip(*sorted(zip(
+                batch_indices, batch_actual, batch_predicted))))
+
+            print("Creating confusion matrix...")
+            confusion_matrix.compute_matrix(actual, predicted)
+
+            experiment.log_confusion_matrix(
+                matrix=confusion_matrix,
+                title="MNIST Confusion Matrix, Epoch #%d" % (epoch + 1),
+                file_name="confusion-matrix-%03d.json" % (epoch + 1),
+            )
+            {%- endif %}
+
+            # Epoch level items
+            {%- if cookiecutter.embedding == "Yes" %}
+
+            if epoch == 0:
+                # First, create the embedding image:
+                def label_to_color(index):
+                    label = all_labels[index]
+                    if label == 0:
+                        return (255, 0, 0)
+                    elif label == 1:
+                        return (0, 255, 0)
+                    elif label == 2:
+                        return (0, 0, 255)
+                    elif label == 3:
+                        return (255, 255, 0)
+                    elif label == 4:
+                        return (0, 255, 255)
+                    elif label == 5:
+                        return (128, 128, 0)
+                    elif label == 6:
+                        return (0, 128, 128)
+                    elif label == 7:
+                        return (128, 0, 128)
+                    elif label == 8:
+                        return (255, 0, 255)
+                    elif label == 9:
+                        return (255, 255, 255)
+
+                print("Creating embedding image...")
+                results = experiment.create_embedding_image(
+                    image_data=inputs,
+                    # we round the pixels to 0 and 1, and multiple by 2
+                    # to keep the non-zero colors dark (if they were 1, they
+                    # would get distributed between 0 and 255):
+                    image_preprocess_function=lambda matrix: np.round(matrix,0) * 2,
+                    # Set the transparent color:
+                    image_transparent_color=(0, 0, 0),
+                    image_size=(
+                        experiment.get_parameter("input_size"),
+                        experiment.get_parameter("input_size"),
+                    ),
+                    # Fill in the transparent color with a background color:
+                    image_background_color_function=label_to_color,
+                )
+                if results:
+                    image, sprite_url = results
+                else:
+                    sprite_url = None
+            else:
+                # In subsequent epochs, log the activations:
+                if sprite_url:
+                    print("Logging embeddings...")
+                    activations = []
+                    for i in range(len(all_labels)):
+                        v = Variable(train_dataset[i][0])
+                        output = rnn(v)
+                        activations.append(rnn.out[0].detach().numpy())
+                    layer_name = "activations/0"
+                    experiment.log_embedding(
+                        activations,
+                        all_labels,
+                        image_data=sprite_url,
+                        image_size=(
+                            experiment.get_parameter("input_size"),
+                            experiment.get_parameter("input_size"),
+                        ),
+                        title="%s-%s" % (layer_name, epoch + 1),
+                        group=layer_name)
+
+            {%- endif %}
+            {%- if cookiecutter.weight_histograms == "Yes" %}
+            # TODO: log weight histograms here!
+            {%- endif %}
+            {%- if cookiecutter.activation_histograms == "Yes" %}
+            # TODO: log activation histograms here!
+            {%- endif %}
+            {%- if cookiecutter.gradient_histograms == "Yes" %}
+            # TODO: log gradient histograms here!
+            {%- endif %}
+
+
+def build_model(experiment):
+    input_size = experiment.get_parameter("input_size")
+    hidden_size = experiment.get_parameter("hidden_size")
+    num_layers = experiment.get_parameter("num_layers")
+    num_classes = experiment.get_parameter("num_classes")
+    learning_rate = experiment.get_parameter("learning_rate")
+
+    class RNN(nn.Module):
+        def __init__(self, input_size, hidden_size, num_layers, num_classes):
+            super(RNN, self).__init__()
+            self.hidden_size = hidden_size
+            self.num_layers = num_layers
+            self.lstm = nn.LSTM(input_size, hidden_size, num_layers, batch_first=True)
+            self.fc = nn.Linear(hidden_size, num_classes)
+
+        def forward(self, x):
+            # Set initial states
+            h0 = Variable(torch.zeros(self.num_layers, x.size(0), self.hidden_size))
+            c0 = Variable(torch.zeros(self.num_layers, x.size(0), self.hidden_size))
+
+            # Forward propagate RNN
+            self.out, _ = self.lstm(x, (h0, c0))
+
+            # Decode hidden state of last time step
+            out = self.fc(self.out[:, -1, :])
+            return out
+
+    rnn = RNN(
+        input_size,
+        hidden_size,
+        num_layers,
+        num_classes,
+    )
+
+    # Loss and Optimizer
+    criterion = nn.CrossEntropyLoss()
+    optimizer = torch.optim.Adam(rnn.parameters(), lr=learning_rate)
+
+    return (rnn, criterion, optimizer)
+
+
+def evaluate(experiment, model, datasets):
+    rnn, criterion, optimizer = model
+    train_dataset, test_dataset = datasets
+
+    test_loader = torch.utils.data.DataLoader(
+        dataset=test_dataset,
+        batch_size=experiment.get_parameter('batch_size'),
+        shuffle=False)
+
+    with experiment.test():
+        # Test the Model
+        correct = 0
+        total = 0
+        for images, labels, index in test_loader:
+            images = Variable(images.view(
+                -1,
+                experiment.get_parameter('sequence_length'),
+                experiment.get_parameter("input_size")))
+            outputs = rnn(images)
+            _, predicted = torch.max(outputs.data, 1)
+            total += labels.size(0)
+            correct += (predicted == labels).sum()
+
+        experiment.log_metric("accuracy", correct / total)
+        print('Test Accuracy of the model on the 10000 test images: %d %%' % (100 * correct / total))
+
+
+def get_datasets(hyper_params):
+    # MNIST Dataset
+    def indexed_dataset(cls):
+        def __getitem__(self, index):
+            data, target = cls.__getitem__(self, index)
+            return data, target, index
+
+        return type(cls.__name__, (cls,), {
+            '__getitem__': __getitem__,
+        })
+
+    MNIST = indexed_dataset(dsets.MNIST)
+
+    train_dataset = MNIST(root='./data/',
+                          train=True,
+                          transform=transforms.ToTensor(),
+                          download=True)
+
+    test_dataset = MNIST(root='./data/',
+                         train=False,
+                         transform=transforms.ToTensor())
+
+    return (train_dataset, test_dataset)
+
+{%- endif %}
+
 
 def main():
-    x_train, y_train, x_test, y_test = get_dataset()
+    hyper_params = {
+        "epochs": {{ cookiecutter.epochs }},
+        "batch_size": 120,
+        "first_layer_units": 128,
+        "sequence_length": 28,
+        "input_size": 28,
+        "hidden_size": 128,
+        "num_layers": 2,
+        "num_classes": 10,
+        "learning_rate": 0.01
+    }
 
     experiment_kwargs = {
         "project_name": "{{ cookiecutter.project_slug }}",
@@ -250,9 +557,13 @@ def main():
         {%- endif %}
     }
 
+    datasets = get_datasets(hyper_params)
+
+
     {%- if ((cookiecutter.weight_histograms == "Yes") or
             (cookiecutter.gradient_histograms == "Yes") or
             (cookiecutter.gradient_histograms == "Yes")) %}
+    {%- if cookiecutter.framework == 'keras' %}
     ########################################################
     # If you would like to control exactly which histograms
     # are logged, how often, which inputs are used, and
@@ -271,21 +582,34 @@ def main():
     # https://www.comet.ml/docs/python-sdk/advanced/#comet-environment-only-variables
     ########################################################
     {%- endif %}
-
-    {%- if cookiecutter.optimizer == 'No' %}
-    {%- if cookiecutter.framework == 'keras' %}
-    experiment = get_comet_experiment(**experiment_kwargs)
-
-    experiment.log_parameter("epochs", 10)
-    experiment.log_parameter("batch_size", 120)
-    experiment.log_parameter("first_layer_units", 128)
     {%- endif %}
 
-    model = build_model_graph(experiment)
+    {%- if cookiecutter.optimizer == 'No' %}
 
-    train(experiment, model, x_train, y_train, x_test, y_test)
+    experiment = get_comet_experiment(**experiment_kwargs)
+    # Logging hyperparameters:
+    experiment.log_parameters(hyper_params)
 
-    evaluate(experiment, model, x_test, y_test)
+    {%- if cookiecutter.logging_samples == 'Yes' %}
+    # Logging samples:
+    experiment.log_text("example text 1")
+    experiment.log_text("example text 2")
+    experiment.log_text("example text 3")
+    experiment.log_curve("curve 1",
+                         x=[x for x in range(100)],
+                         y=[y ** 2 for y in range(100)])
+    experiment.log_points_3d("scene 1",
+                         points=[(random.random(),
+                                  random.random(),
+                                  random.random()) for _ in range(100)],
+    )
+    {%- endif %}
+
+    model = build_model(experiment)
+
+    train(experiment, model, datasets)
+
+    evaluate(experiment, model, datasets)
 
     experiment.end()
     {%- endif %}
@@ -294,7 +618,16 @@ def main():
     config = {
         "algorithm": "bayes",
         "name": "Optimize MNIST Network",
-        "spec": {"maxCombo": 10, "objective": "minimize", "metric": "loss"},
+        "spec": {
+            "maxCombo": 10,
+            "objective":
+            "minimize",
+{%- if cookiecutter.framework == 'pytorch' %}
+            "metric": "train_loss",
+{%- elif cookiecutter.framework == 'keras' %}
+            "metric": "loss",
+{%- endif %}
+        },
         "parameters": {
             "first_layer_units": {
                 "type": "integer",
@@ -316,13 +649,18 @@ def main():
     opt = comet_ml.Optimizer(config, experiment_class=experiment_class)
 
     for experiment in opt.get_experiments(**experiment_kwargs):
-        experiment.log_parameter("epochs", 10)
+        # We remove the two hyperparameters that are set by optimizer
+        # as we don't want to overwrite them:
+        del hyper_params["first_layer_units"]
+        del hyper_params["batch_size"]
+        # Log the remainder:
+        experiment.log_parameters(hyper_params)
 
-        model = build_model_graph(experiment)
+        model = build_model(experiment)
 
-        train(experiment, model, x_train, y_train, x_test, y_test)
+        train(experiment, model, datasets)
 
-        evaluate(experiment, model, x_test, y_test)
+        evaluate(experiment, model, datasets)
 
         experiment.end()
     {%- endif %}
