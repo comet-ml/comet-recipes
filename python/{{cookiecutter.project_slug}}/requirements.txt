@@ -4,8 +4,12 @@ keras
 tensorflow<2.3
     {%- if cookiecutter.embedding == "Yes" %}
 keract>=4.3.3
+    {%- endif %}
+{%- endif %}
+{%- if cookiecutter.framework == 'pytorch' %}
+torch
+torchvision
+{%- endif %}
 numpy
 pillow
 matplotlib
-    {%- endif %}
-{%- endif %}
